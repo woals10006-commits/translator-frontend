@@ -1,16 +1,20 @@
-# React + Vite
+# 중국어 → 한국어 번역기 (프론트엔드)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Word(.docx) 파일을 업로드하면 중국어 웹소설을 한국어로 번역해 주는 웹앱의 프론트엔드입니다.
+React + Vite로 제작했으며, 백엔드([translator-backend](https://github.com/woals10006-commits/translator-backend))와 연동됩니다.
 
-Currently, two official plugins are available:
+## 기술 스택
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React + Vite
+- 백엔드: Spring Boot + Claude API (별도 저장소)
 
-## React Compiler
+## 실행
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev
+```
 
-## Expanding the ESLint configuration
+→ http://localhost:5173 접속 → .docx 업로드 → 번역할 화 수 입력 → 번역 시작.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+번역이 동작하려면 백엔드(translator-backend)를 먼저 실행해야 합니다.
