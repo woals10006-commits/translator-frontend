@@ -6,7 +6,13 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
-  const [maxChapters, setMaxChapters] = useState(100)
+  const [startChapter, setStartChapter] = useState('1')
+  const [endChapter, setEndChapter] = useState('100')
+  const [customPrompt, setCustomPrompt] = useState('')
+  const [savedPath, setSavedPath] = useState('')
+
+  // Keep only digits and strip any leading zeros so typing "020" shows "20".
+  const cleanNum = (v) => v.replace(/\D/g, '').replace(/^0+(?=\d)/, '')
   const [progress, setProgress] = useState(0)
   const inputRef = useRef()
   const pollRef = useRef()
@@ -43,12 +49,16 @@ function App() {
     setError('')
     setDone(false)
     setProgress(0)
+    setSavedPath('')
 
     try {
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('customPrompt', customPrompt)
 
-      const res = await fetch(`http://localhost:8080/api/translate?maxChapters=${maxChapters}`, {
+      const start = parseInt(startChapter, 10) || 1
+      const end = parseInt(endChapter, 10) || start
+      const res = await fetch(`http://localhost:8080/api/translate?startChapter=${start}&endChapter=${end}`, {
         method: 'POST',
         body: formData,
       })
@@ -69,13 +79,10 @@ function App() {
               return
             }
 
-            const blob = await fetch(`http://localhost:8080/api/download/${jobId}`).then(r => r.blob())
-            const url = window.URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `translated_${file.name}`
-            a.click()
-            window.URL.revokeObjectURL(url)
+            // The backend saves the finished file to disk itself (the reliable
+            // path that survives a closed tab), so we do NOT trigger a second,
+            // less-reliable browser download — just show where the file landed.
+            setSavedPath(prog.savedPath || '')
             setDone(true)
             setLoading(false)
 
@@ -129,15 +136,35 @@ function App() {
       </div>
 
       <div className="chapter-input">
-        <label>번역할 화 수</label>
+        <label>번역 범위</label>
         <input
-          type="number"
-          min="1"
-          value={maxChapters}
-          onChange={(e) => setMaxChapters(Number(e.target.value))}
+          type="text"
+          inputMode="numeric"
+          value={startChapter}
+          onChange={(e) => setStartChapter(cleanNum(e.target.value))}
           disabled={loading}
         />
-        <span>화까지</span>
+        <span>화 ~</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={endChapter}
+          onChange={(e) => setEndChapter(cleanNum(e.target.value))}
+          disabled={loading}
+        />
+        <span>화</span>
+      </div>
+
+      <div className="custom-prompt">
+        <label htmlFor="customPrompt">번역 요청사항 <span className="optional">(선택 · 매번 다르게 입력 가능)</span></label>
+        <textarea
+          id="customPrompt"
+          value={customPrompt}
+          onChange={(e) => setCustomPrompt(e.target.value)}
+          disabled={loading}
+          rows={4}
+          placeholder={"예) 주인공 이름은 '린위'로 통일해줘\n예) 대사는 반말, 서술은 문어체로\n예) '师父'는 '사부님'으로 번역\n예) 전체적으로 담백하고 건조한 문체로"}
+        />
       </div>
 
       {loading && (
@@ -150,7 +177,17 @@ function App() {
       )}
 
       {error && <p className="error">{error}</p>}
-      {done && <p className="success">번역 완료! 파일이 다운로드되었습니다.</p>}
+      {done && (
+        <div className="success">
+          <p>번역 완료! 파일이 저장되었습니다.</p>
+          {savedPath && (
+            <p className="saved-path">
+              저장 위치 (이 파일 하나만 생성됩니다):<br />
+              <code>{savedPath}</code>
+            </p>
+          )}
+        </div>
+      )}
 
       <button
         className="translate-btn"
