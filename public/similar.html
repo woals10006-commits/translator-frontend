@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이슈단어 체크</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Malgun Gothic", "맑은 고딕", sans-serif;
+      background: #f4f5f7;
+      color: #1a1a2e;
+      margin: 0;
+      padding: 32px 16px;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+    }
+    h1 { margin: 0 0 4px; font-size: 24px; }
+    .subtitle { color: #666; margin: 0 0 28px; font-size: 14px; }
+    .field { margin-bottom: 20px; }
+    .field > label {
+      display: block;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .drop {
+      border: 2px dashed #cbd0dc;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: 0.15s;
+      background: #fafbfc;
+    }
+    .drop:hover { border-color: #6c8cff; background: #f5f8ff; }
+    .drop.has-file { border-color: #4caf50; background: #f2fbf3; }
+    .drop .hint { color: #888; font-size: 13px; }
+    .drop .fname { font-weight: 600; color: #2a7d34; }
+    .drop .small { font-size: 12px; color: #aaa; margin-top: 4px; }
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      background: #4a63ff;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    button:hover:not(:disabled) { background: #3a51e0; }
+    button:disabled { background: #c2c8d6; cursor: not-allowed; }
+    .error { color: #d33; font-size: 14px; margin: 12px 0 0; white-space: pre-wrap; }
+    .result { margin-top: 28px; }
+    .result-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .result-head h2 { font-size: 18px; margin: 0; }
+    .summary { font-size: 13px; color: #666; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; }
+    th { font-size: 13px; color: #888; font-weight: 600; }
+    td.word { font-weight: 600; }
+    td.count { text-align: right; }
+    .badge {
+      display: inline-block;
+      min-width: 28px;
+      text-align: center;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: #eef1ff;
+      color: #4a63ff;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .none { color: #999; padding: 16px 0; text-align: center; }
+    .toggle { font-size: 13px; color: #4a63ff; cursor: pointer; user-select: none; }
+    .toggle input { margin-right: 6px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>이슈단어 체크</h1>
+    <p class="subtitle">이슈단어 목록(.txt)과 원고(.docx)를 넣으면, 원고에 들어있는 이슈단어와 횟수를 알려줍니다.</p>
+
+    <div class="field">
+      <label>1. 이슈단어 목록 (.txt)</label>
+      <div class="drop" id="txtDrop">
+        <div class="hint" id="txtHint">클릭하거나 파일을 드래그하세요<div class="small">한 줄에 단어 하나 (또는 쉼표로 구분)</div></div>
+      </div>
+      <input type="file" id="txtInput" accept=".txt" hidden />
+    </div>
+
+    <div class="field">
+      <label>2. 원고 (.docx)</label>
+      <div class="drop" id="docDrop">
+        <div class="hint" id="docHint">클릭하거나 파일을 드래그하세요<div class="small">.docx 파일만 지원</div></div>
+      </div>
+      <input type="file" id="docInput" accept=".docx" hidden />
+    </div>
+
+    <button id="runBtn" disabled>이슈단어 찾기</button>
+    <p class="error" id="error"></p>
+
+    <div class="result" id="result" style="display:none">
+      <div class="result-head">
+        <h2>결과</h2>
+        <span class="summary" id="summary"></span>
+      </div>
+      <label class="toggle"><input type="checkbox" id="showAll" /> 원고에 없는 단어도 보기</label>
+      <table>
+        <thead>
+          <tr><th>이슈단어</th><th style="text-align:right">나온 횟수</th></tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const state = { txtFile: null, docFile: null, results: [] };
+    const $ = (id) => document.getElementById(id);
+    const showError = (msg) => { $('error').textContent = msg || ''; };
+
+    // ---- 파일 드롭존 연결: 여기서는 파일만 기억하고, 실제 분석은 버튼 누를 때 ----
+    function wireDrop(dropId, inputId, hintId, ext, onPick) {
+      const drop = $(dropId), input = $(inputId), hint = $(hintId);
+      drop.addEventListener('click', () => input.click());
+      drop.addEventListener('dragover', (e) => e.preventDefault());
+      drop.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files[0]) pick(e.dataTransfer.files[0]); });
+      input.addEventListener('change', (e) => { if (e.target.files[0]) pick(e.target.files[0]); });
+      function pick(f) {
+        if (!f.name.toLowerCase().endsWith(ext)) { showError(`${ext} 파일만 넣을 수 있어요.`); return; }
+        showError('');
+        drop.classList.add('has-file');
+        hint.innerHTML = `<span class="fname">📄 ${f.name}</span>`;
+        onPick(f);
+      }
+    }
+
+    wireDrop('txtDrop', 'txtInput', 'txtHint', '.txt', (f) => { state.txtFile = f; refreshButton(); });
+    wireDrop('docDrop', 'docInput', 'docHint', '.docx', (f) => { state.docFile = f; refreshButton(); });
+
+    function refreshButton() {
+      $('runBtn').disabled = !(state.txtFile && state.docFile);
+    }
+
+    // ---- 이슈단어(txt) 읽기: UTF-8 우선, 깨지면 EUC-KR로 재시도 ----
+    async function readIssueWords(file) {
+      const buf = await file.arrayBuffer();
+      let text = new TextDecoder('utf-8').decode(buf);
+      if (text.includes('�')) {            // 깨진 글자가 있으면 한글 윈도우 인코딩으로 재시도
+        try { text = new TextDecoder('euc-kr').decode(buf); } catch (_) {}
+      }
+      const words = text.split(/[\r\n,]+/).map((w) => w.trim()).filter((w) => w.length > 0);
+      return [...new Set(words)];
+    }
+
+    // ---- 원고(docx) 읽기: 외부 라이브러리 없이 브라우저 내장 기능으로 압축 해제 ----
+    async function readManuscript(file) {
+      const buf = await file.arrayBuffer();
+      const view = new DataView(buf);
+      const bytes = new Uint8Array(buf);
+
+      // ZIP의 EOCD(끝 표식) 찾기
+      let eocd = -1;
+      for (let i = bytes.length - 22; i >= 0; i--) {
+        if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+      }
+      if (eocd < 0) throw new Error('올바른 .docx(zip) 파일이 아닙니다.');
+
+      const cdCount = view.getUint16(eocd + 10, true);
+      let p = view.getUint32(eocd + 16, true);
+      let target = null;
+      for (let i = 0; i < cdCount; i++) {
+        if (view.getUint32(p, true) !== 0x02014b50) break;
+        const method = view.getUint16(p + 10, true);
+        const compSize = view.getUint32(p + 20, true);
+        const nameLen = view.getUint16(p + 28, true);
+        const extraLen = view.getUint16(p + 30, true);
+        const commentLen = view.getUint16(p + 32, true);
+        const localOffset = view.getUint32(p + 42, true);
+        const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
+        if (name === 'word/document.xml') { target = { method, compSize, localOffset }; break; }
+        p += 46 + nameLen + extraLen + commentLen;
+      }
+      if (!target) throw new Error('원고 본문(document.xml)을 찾지 못했습니다.');
+
+      const lo = target.localOffset;
+      const dataStart = lo + 30 + view.getUint16(lo + 26, true) + view.getUint16(lo + 28, true);
+      const compData = bytes.subarray(dataStart, dataStart + target.compSize);
+
+      let xmlBytes;
+      if (target.method === 0) {
+        xmlBytes = compData;                     // 압축 안 됨
+      } else {
+        const ds = new DecompressionStream('deflate-raw');
+        const stream = new Response(compData).body.pipeThrough(ds);
+        xmlBytes = new Uint8Array(await new Response(stream).arrayBuffer());
+      }
+      const xml = new TextDecoder('utf-8').decode(xmlBytes);
+
+      // 문단/줄바꿈을 살리고 태그 제거
+      const text = xml
+        .replace(/<\/w:p>/g, '\n')
+        .replace(/<w:tab\b[^>]*\/?>/g, '\t')
+        .replace(/<w:br\b[^>]*\/?>/g, '\n')
+        .replace(/<[^>]+>/g, '');
+      return decodeXmlEntities(text);
+    }
+
+    function decodeXmlEntities(s) {
+      return s
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+        .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+        .replace(/&amp;/g, '&');
+    }
+
+    // ---- 단어 횟수 세기 ----
+    function countOccurrences(text, word) {
+      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const matches = text.match(new RegExp(escaped, 'gi'));
+      return matches ? matches.length : 0;
+    }
+
+    // ---- 실행 ----
+    async function run() {
+      showError('');
+      const btn = $('runBtn');
+      btn.disabled = true;
+      btn.textContent = '분석 중...';
+      try {
+        const [issueWords, text] = await Promise.all([
+          readIssueWords(state.txtFile),
+          readManuscript(state.docFile),
+        ]);
+        if (issueWords.length === 0) throw new Error('이슈단어 목록이 비어 있습니다. txt 파일 내용을 확인해주세요.');
+
+        state.issueWords = issueWords;
+        state.results = issueWords
+          .map((word) => ({ word, count: countOccurrences(text, word) }))
+          .sort((a, b) => b.count - a.count);
+        render();
+      } catch (err) {
+        showError('오류: ' + (err && err.message ? err.message : err));
+      } finally {
+        btn.textContent = '이슈단어 찾기';
+        refreshButton();
+      }
+    }
+
+    function render() {
+      const showAll = $('showAll').checked;
+      const rows = state.results.filter((r) => showAll || r.count > 0);
+      const foundCount = state.results.filter((r) => r.count > 0).length;
+
+      $('result').style.display = 'block';
+      $('summary').textContent = `이슈단어 ${state.issueWords.length}개 중 ${foundCount}개가 원고에 있음`;
+
+      const tbody = $('tbody');
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="2" class="none">표시할 단어가 없습니다.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map((r) => `
+        <tr>
+          <td class="word">${escapeHtml(r.word)}</td>
+          <td class="count">${r.count > 0 ? `<span class="badge">${r.count}</span>` : `<span style="color:#bbb">0</span>`}</td>
+        </tr>
+      `).join('');
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    $('runBtn').addEventListener('click', run);
+    $('showAll').addEventListener('change', () => { if (state.results.length) render(); });
+  </script>
+</body>
+</html>

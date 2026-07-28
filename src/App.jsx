@@ -1,7 +1,11 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import './App.css'
 
+// 앱(브라우저 탭) 이름 — 여기 값만 바꾸면 시작 화면 제목이 바뀝니다.
+const APP_NAME = '웹소설 도구'
+
 function App() {
+  const [view, setView] = useState('home')   // 'home' | 'translate' | 'similar'
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -16,6 +20,19 @@ function App() {
   const [progress, setProgress] = useState(0)
   const inputRef = useRef()
   const pollRef = useRef()
+
+  // Navigate between views AND push a browser-history entry, so the browser's
+  // back button (and the ← 홈 button, which just calls history.back) returns
+  // to the previous screen instead of doing nothing.
+  const go = (v) => {
+    window.history.pushState({ view: v }, '')
+    setView(v)
+  }
+  useEffect(() => {
+    const onPop = (e) => setView(e.state?.view ?? 'home')
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0]
@@ -103,6 +120,38 @@ function App() {
     }
   }
 
+  // ===== 시작 화면 (버튼 2개) =====
+  if (view === 'home') {
+    return (
+      <div className="home">
+        <h1 className="home-title">{APP_NAME}</h1>
+        <p className="home-sub">사용할 도구를 선택하세요</p>
+        <div className="home-cards">
+          <button className="home-card" onClick={() => go('translate')}>
+            <span className="home-card-icon">📖</span>
+            <span className="home-card-title">웹소설 번역</span>
+            <span className="home-card-desc">중국어 Word(.docx) → 한국어 번역</span>
+          </button>
+          <button className="home-card" onClick={() => go('similar')}>
+            <span className="home-card-icon">🔍</span>
+            <span className="home-card-title">유사언어(이슈단어) 찾기</span>
+            <span className="home-card-desc">원고 속 이슈 단어 검사</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ===== 유사언어 찾기 도구 (앱 안에 끼워 넣음) =====
+  if (view === 'similar') {
+    return (
+      <div className="tool-page">
+        <iframe className="tool-frame" src="/similar.html" title="유사언어 찾기" />
+      </div>
+    )
+  }
+
+  // ===== 번역기 =====
   return (
     <div className="container">
       <h1>중국어 → 한국어 번역기</h1>
